@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Chatbot - Cierre</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        body { margin: 0; padding: 20px; font-family: system-ui, sans-serif; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 8px; }
+        .test-result { margin: 10px 0; padding: 10px; border-radius: 4px; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Test de Funcionalidad del Chatbot</h1>
+    
+    <div class="test-section">
+        <h2>📋 Instrucciones de Prueba</h2>
+        <ol>
+            <li>Haz clic en el botón "Chat IA" para abrir el chat</li>
+            <li>Haz clic en el botón × para cerrar el chat</li>
+            <li>Haz clic fuera del chat para cerrarlo</li>
+            <li>Verifica que el chat se cierre correctamente en todos los casos</li>
+        </ol>
+    </div>
+
+    <div class="test-section">
+        <h2>🧪 Resultados de Prueba</h2>
+        <div id="testResults"></div>
+    </div>
+
+    <!-- Chatbot Widget -->
+    <div class="chatFab" id="chatFab" aria-expanded="false">Chat IA</div>
+
+    <section class="chatWidget" id="chatWidget" hidden aria-live="polite">
+        <div class="chatHeader">
+            <div>
+                <div class="chatTitle">Asistente IA (Nexus-1)</div>
+                <div class="chatSub">Dudas rápidas. Si dejas tu WhatsApp, te mando la respuesta allí.</div>
+            </div>
+            <button class="chatClose" id="chatClose" aria-label="Cerrar chat">×</button>
+        </div>
+
+        <div class="chatMeta">
+            <label class="field">
+                <span>Tu nombre (opcional)</span>
+                <input type="text" id="chatName" placeholder="Ej. Carlos" autocomplete="name" />
+            </label>
+            <label class="field">
+                <span>WhatsApp (para enviarte las respuestas)</span>
+                <input type="tel" id="chatPhone" placeholder="34XXXXXXXXX" autocomplete="tel" />
+            </label>
+        </div>
+
+        <div class="chatMessages" id="chatMessages">
+            <div class="msg msg--bot">¡Hola! Soy Nexus-1. Estoy procesando datos para ayudarte a optimizar tu tiempo. ¿Quieres saber cómo la IA va a transformar tu negocio o tienes dudas sobre nuestro evento en Almuñécar?</div>
+        </div>
+
+        <form class="chatForm" id="chatForm">
+            <input type="text" id="chatInput" placeholder="Escribe tu duda..." autocomplete="off" />
+            <button class="btn btn--small" type="submit">Enviar</button>
+        </form>
+
+        <div class="micro" id="chatStatus"></div>
+    </section>
+
+    <script>
+        // Test script
+        const testResults = document.getElementById('testResults');
+        let testsPassed = 0;
+        let totalTests = 0;
+
+        function addTestResult(testName, passed, message) {
+            totalTests++;
+            if (passed) testsPassed++;
+            
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `test-result ${passed ? 'success' : 'error'}`;
+            resultDiv.innerHTML = `
+                <strong>${testName}:</strong> ${passed ? '✅ PASÓ' : '❌ FALLÓ'}<br>
+                ${message}
+            `;
+            testResults.appendChild(resultDiv);
+        }
+
+        function addInfo(message) {
+            const infoDiv = document.createElement('div');
+            infoDiv.className = 'test-result info';
+            infoDiv.innerHTML = `<strong>ℹ️ Info:</strong> ${message}`;
+            testResults.appendChild(infoDiv);
+        }
+
+        // Wait for DOM to be ready
+        document.addEventListener('DOMContentLoaded', function() {
+            addInfo('Iniciando pruebas de funcionalidad del chatbot...');
+            
+            const fab = document.getElementById('chatFab');
+            const widget = document.getElementById('chatWidget');
+            const closeBtn = document.getElementById('chatClose');
+            
+            if (!fab || !widget || !closeBtn) {
+                addTestResult('Elementos necesarios', false, 'No se encontraron todos los elementos del chatbot');
+                return;
+            }
+
+            addTestResult('Elementos encontrados', true, 'Todos los elementos del chatbot están presentes');
+
+            // Test 1: Verificar que el chat esté cerrado inicialmente
+            addTestResult('Estado inicial', widget.hidden, 'El chat debería estar cerrado inicialmente');
+
+            // Test 2: Abrir el chat
+            fab.click();
+            setTimeout(() => {
+                addTestResult('Abrir chat', !widget.hidden, 'El chat debería estar abierto después de clickear el FAB');
+
+                // Test 3: Cerrar con el botón ×
+                closeBtn.click();
+                setTimeout(() => {
+                    addTestResult('Cerrar con botón ×', widget.hidden, 'El chat debería estar cerrado después de clickear ×');
+
+                    // Test 4: Verificar aria-expanded
+                    addTestResult('ARIA expanded', fab.getAttribute('aria-expanded') === 'false', 'El atributo aria-expanded debería ser "false" cuando está cerrado');
+
+                    // Test 5: Test de cierre al hacer clic fuera
+                    fab.click(); // Abrir de nuevo
+                    setTimeout(() => {
+                        // Simular clic fuera
+                        const outsideClick = new MouseEvent('mousedown', {
+                            bubbles: true,
+                            cancelable: true,
+                            view: window
+                        });
+                        document.body.dispatchEvent(outsideClick);
+                        
+                        setTimeout(() => {
+                            addTestResult('Cierre por clic fuera', widget.hidden, 'El chat debería cerrarse al hacer clic fuera');
+                            
+                            // Resumen final
+                            setTimeout(() => {
+                                const summary = document.createElement('div');
+                                summary.className = `test-result ${testsPassed === totalTests ? 'success' : 'error'}`;
+                                summary.innerHTML = `
+                                    <strong>📊 Resumen Final:</strong><br>
+                                    Tests pasados: ${testsPassed}/${totalTests}<br>
+                                    ${testsPassed === totalTests ? '�¡Todos los tests pasaron!' : '⚠️ Algunos tests fallaron. Revisa la implementación.'}
+                                `;
+                                testResults.appendChild(summary);
+                            }, 500);
+                        }, 300);
+                    }, 300);
+                }, 300);
+            }, 300);
+        });
+    </script>
+</body>
+</html>

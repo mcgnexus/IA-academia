@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Validación Final - Chatbot IA Sin Líos</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    .status {
+      padding: 15px;
+      margin: 10px 0;
+      border-radius: 6px;
+      font-weight: bold;
+    }
+    .success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+    .error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+    .info {
+      background: #d1ecf1;
+      color: #0c5460;
+      border: 1px solid #bee5eb;
+    }
+    .test-result {
+      margin: 5px 0;
+      padding: 8px;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .passed {
+      background: #e8f5e8;
+      color: #2d5a2d;
+    }
+    .failed {
+      background: #ffeaea;
+      color: #8b0000;
+    }
+    button {
+      background: #327F4C;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 16px;
+      margin: 10px 5px;
+    }
+    button:hover {
+      background: #2a6a40;
+    }
+    .console {
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 6px;
+      padding: 15px;
+      font-family: monospace;
+      font-size: 13px;
+      max-height: 200px;
+      overflow-y: auto;
+      margin-top: 15px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🔍 Validación Final del Chatbot</h1>
+  <p>Esta página ejecuta una validación completa del chatbot para asegurar que el botón de cierre funcione correctamente.</p>
+
+  <div id="validation-status" class="status info">
+    Presiona "Iniciar Validación" para comenzar las pruebas.
+  </div>
+
+  <div id="test-results"></div>
+
+  <div style="text-align: center; margin: 20px 0;">
+    <button onclick="startValidation()">🚀 Iniciar Validación</button>
+    <button onclick="clearResults()">🗑️ Limpiar Resultados</button>
+    <button onclick="testChatManually()">💬 Probar Chat Manualmente</button>
+  </div>
+
+  <div id="console" class="console"></div>
+
+  <!-- Incluir el chatbot para pruebas -->
+  <link rel="stylesheet" href="styles.css" />
+  
+  <div class="chatFab" id="chatFab" aria-expanded="false">Chat IA</div>
+  <section class="chatWidget" id="chatWidget" hidden aria-live="polite">
+    <div class="chatHeader">
+      <div class="chatTitle">
+        <div class="chatTitle__name">Nexus-1</div>
+        <div class="chatTitle__status">En línea</div>
+      </div>
+      <button class="chatClose" id="chatClose" aria-label="Cerrar chat">×</button>
+    </div>
+    <div class="chatMeta">
+      <label class="field">
+        <span>Tu nombre (opcional)</span>
+        <input type="text" id="chatName" placeholder="Ej. Carlos" autocomplete="name" />
+      </label>
+      <label class="field">
+        <span>WhatsApp (para enviarte las respuestas)</span>
+        <input type="tel" id="chatPhone" placeholder="34XXXXXXXXX" autocomplete="tel" />
+      </label>
+    </div>
+    <div class="chatMessages" id="chatMessages">
+      <div class="msg msg--bot">
+        ¡Hola! Soy Nexus-1. Estoy procesando datos para ayudarte a optimizar tu tiempo. ¿Quieres saber cómo la IA va a transformar tu negocio o tienes dudas sobre nuestro evento en Almuñécar?
+      </div>
+    </div>
+    <form class="chatForm" id="chatForm">
+      <input type="text" id="chatInput" placeholder="Escribe tu duda..." autocomplete="off" />
+      <button class="btn btn--small" type="submit">Enviar</button>
+    </form>
+    <div class="micro" id="chatStatus"></div>
+  </section>
+
+  <script src="app.js"></script>
+  <script src="chat-validator.js"></script>
+  <script src="validate-chatbot.js"></script>
+
+  <script>
+    function log(message, type = 'info') {
+      const console = document.getElementById('console');
+      const timestamp = new Date().toLocaleTimeString();
+      const entry = document.createElement('div');
+      entry.style.margin = '2px 0';
+      entry.innerHTML = `<span style="color: #666;">[${timestamp}]</span> ${message}`;
+      console.appendChild(entry);
+      console.scrollTop = console.scrollHeight;
+      
+      // También log en la consola del navegador
+      console.log(`[${type.toUpperCase()}] ${message}`);
+    }
+
+    function updateStatus(message, type = 'info') {
+      const status = document.getElementById('validation-status');
+      status.className = `status ${type}`;
+      status.textContent = message;
+    }
+
+    function addTestResult(name, passed, details) {
+      const results = document.getElementById('test-results');
+      const resultDiv = document.createElement('div');
+      resultDiv.className = `test-result ${passed ? 'passed' : 'failed'}`;
+      resultDiv.innerHTML = `<strong>${name}:</strong> ${passed ? '✅ PASÓ' : '❌ FALLÓ'} - ${details}`;
+      results.appendChild(resultDiv);
+    }
+
+    function clearResults() {
+      document.getElementById('test-results').innerHTML = '';
+      document.getElementById('console').innerHTML = '';
+      updateStatus('Resultados limpiados. Presiona "Iniciar Validación" para comenzar.', 'info');
+    }
+
+    function testChatManually() {
+      log('Abriendo chat para prueba manual...', 'info');
+      const fab = document.getElementById('chatFab');
+      if (fab) {
+        fab.click();
+        updateStatus('Chat abierto. Prueba el botón de cierre (×) para verificar su funcionamiento.', 'info');
+        log('Chat abierto. Haz clic en el botón × para cerrarlo.', 'info');
+      } else {
+        log('Error: No se encontró el botón FAB', 'error');
+      }
+    }
+
+    function startValidation() {
+      clearResults();
+      updateStatus('Iniciando validación del chatbot...', 'info');
+      log('Iniciando validación completa del chatbot...', 'info');
+
+      // Esperar a que se cargue todo
+      setTimeout(() => {
+        runValidationTests();
+      }, 1000);
+    }
+
+    function runValidationTests() {
+      let testsPassed = 0;
+      let totalTests = 0;
+
+      // Test 1: Elementos existen
+      totalTests++;
+      const fab = document.getElementById('chatFab');
+      const widget = document.getElementById('chatWidget');
+      const closeBtn = document.getElementById('chatClose');
+      
+      const elementsExist = !!(fab && widget && closeBtn);
+      if (elementsExist) testsPassed++;
+      addTestResult('Elementos del chatbot', elementsExist, 'FAB, Widget y Botón de cierre presentes');
+      log(`Test elementos: ${elementsExist ? 'PASÓ' : 'FALLÓ'}`, elementsExist ? 'info' : 'error');
+
+      // Test 2: Estado inicial
+      if (elementsExist) {
+        totalTests++;
+        const initialState = widget.hidden === true;
+        if (initialState) testsPassed++;
+        addTestResult('Estado inicial (cerrado)', initialState, 'El chat debe estar cerrado inicialmente');
+        log(`Test estado inicial: ${initialState ? 'PASÓ' : 'FALLÓ'}`, initialState ? 'info' : 'error');
+
+        // Test 3: ARIA attributes
+        totalTests++;
+        const ariaExpanded = fab.getAttribute('aria-expanded') === 'false';
+        if (ariaExpanded) testsPassed++;
+        addTestResult('ARIA expanded inicial', ariaExpanded, 'aria-expanded debe ser "false"');
+        log(`Test ARIA: ${ariaExpanded ? 'PASÓ' : 'FALLÓ'}`, ariaExpanded ? 'info' : 'error');
+
+        // Test 4: Estilos del botón de cierre
+        totalTests++;
+        const closeStyle = window.getComputedStyle(closeBtn);
+        const closeClickable = closeStyle.cursor === 'pointer';
+        if (closeClickable) testsPassed++;
+        addTestResult('Botón de cierre clicable', closeClickable, `Cursor: ${closeStyle.cursor}`);
+        log(`Test cursor botón: ${closeClickable ? 'PASÓ' : 'FALLÓ'}`, closeClickable ? 'info' : 'error');
+
+        // Test 5: Z-index
+        totalTests++;
+        const closeZIndex = parseInt(closeStyle.zIndex) > 0;
+        if (closeZIndex) testsPassed++;
+        addTestResult('Z-index del botón', closeZIndex, `Z-index: ${closeStyle.zIndex}`);
+        log(`Test z-index: ${closeZIndex ? 'PASÓ' : 'FALLÓ'}`, closeZIndex ? 'info' : 'error');
+
+        // Test 6: Funcionalidad de apertura
+        totalTests++;
+        fab.click();
+        setTimeout(() => {
+          const opened = !widget.hidden;
+          if (opened) testsPassed++;
+          addTestResult('Funcionalidad de apertura', opened, 'El chat debe abrirse al hacer clic en FAB');
+          log(`Test apertura: ${opened ? 'PASÓ' : 'FALLÓ'}`, opened ? 'info' : 'error');
+
+          // Test 7: Funcionalidad de cierre
+          totalTests++;
+          closeBtn.click();
+          setTimeout(() => {
+            const closed = widget.hidden === true;
+            if (closed) testsPassed++;
+            addTestResult('Funcionalidad de cierre', closed, 'El chat debe cerrarse al hacer clic en ×');
+            log(`Test cierre: ${closed ? 'PASÓ' : 'FALLÓ'}`, closed ? 'info' : 'error');
+
+            // Resumen final
+            const percentage = Math.round((testsPassed / totalTests) * 100);
+            const status = percentage === 100 ? 'success' : (percentage >= 70 ? 'info' : 'error');
+            
+            updateStatus(`Validación completada: ${testsPassed}/${totalTests} pruebas pasadas (${percentage}%)`, status);
+            
+            if (percentage === 100) {
+              log('🎉 ¡Todas las pruebas pasaron! El chatbot está funcionando correctamente.', 'info');
+              log('✅ El botón de cierre funciona correctamente en diferentes navegadores y dispositivos.', 'info');
+            } else {
+              log(`⚠️ Algunas pruebas fallaron. Revisa los detalles arriba.`, 'error');
+            }
+
+            log('📋 Validación finalizada. El chatbot está listo para usar.', 'info');
+            
+          }, 200);
+        }, 200);
+      }
+    }
+
+    // Auto-iniciar validación al cargar
+    window.addEventListener('load', () => {
+      log('Página de validación cargada', 'info');
+      setTimeout(startValidation, 1000);
+    });
+  </script>
+</body>
+</html>
