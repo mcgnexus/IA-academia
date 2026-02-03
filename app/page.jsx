@@ -7,24 +7,16 @@ const GOOGLE_FORM_EMBED_URL = "https://docs.google.com/forms/d/e/1FAIpQLSf-donb7
 const GOOGLE_FORM_DIRECT_URL = "https://docs.google.com/forms/d/e/1FAIpQLSf-donb7o4oAWk40ecIzNdnLqPioea2EXLQ8H13GitEe5fXeQ/viewform";
 
 const BIZUM_NUMBER = "614242716";
-const BIZUM_AMOUNT = "5€";
-const BIZUM_CONCEPT = "IA 14FEB + Nombre";
-const WHAPI_URL = "https://gate.whapi.cloud/messages/text";
+const BIZUM_AMOUNT = "6€";
 const WHAPI_TOKEN = process.env.NEXT_PUBLIC_WHAPI_TOKEN || "";
-const MISTRAL_URL = "https://api.mistral.ai/v1/chat/completions";
-const MISTRAL_MODEL = "mistral-small";
 const MISTRAL_API_KEY = process.env.NEXT_PUBLIC_MISTRAL_API_KEY || "";
 
 const systemPrompt =
   "Eres 'Nexus-1', el avanzado asistente de IA de TecRural. Tu misión es demostrar el poder de la inteligencia artificial de forma fascinante pero accesible. Hablas con un tono profesional, innovador y entusiasta. Usa terminología tecnológica moderna (como 'automatización', 'productividad exponencial', 'prompts optimizados') pero asegúrate de que un autónomo o una familia lo entienda. " +
-  "Información clave del evento: Nombre: IA Sin Líos. Cuándo: 14/02/2026 a las 12:00. Dónde: Academia MR.C (Almuñécar). Inversión: 5€. " +
+  "Información clave del evento: Nombre: IA Sin Líos. Cuándo: 14/02/2026 a las 12:00. Dónde: Academia MR.C (Almuñécar). Inversión: 6€. " +
   "Destaca que no es teoría, sino un salto tecnológico para su día a día. Puedes dar ejemplos de cómo la IA redacta menús, responde reseñas o planifica semanas en segundos. ¡Haz que sientan que el futuro ya está aquí!";
 
 /* ---------- helpers ---------- */
-function clamp(n, min, max) {
-  return Math.max(min, Math.min(max, n));
-}
-
 function buildConcept(name) {
   if (name && name.trim().length > 1) return `IA 14FEB + ${name.trim()}`;
   return "IA 14FEB + Nombre";
@@ -95,15 +87,11 @@ export default function Home() {
 
   // 2. States
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [minsNow, setMinsNow] = useState(30);
-  const [minsAfter, setMinsAfter] = useState(10);
   const [bizumName, setBizumName] = useState("");
   const [bizumPhone, setBizumPhone] = useState("");
   const [bizumStatus, setBizumStatus] = useState("");
   const [chatOpen, setChatOpen] = useState(false);
   const [chatInput, setChatInput] = useState("");
-  const [chatName, setChatName] = useState("");
-  const [chatPhone, setChatPhone] = useState("");
   const [chatStatus, setChatStatus] = useState("");
   const [chatBusy, setChatBusy] = useState(false);
   const [messages, setMessages] = useState([
@@ -114,43 +102,13 @@ export default function Home() {
   ]);
 
   // 3. Memos
-  const targetHours = useMemo(() => {
-    const saved = Math.max(0, clamp(minsNow, 0, 600) - clamp(minsAfter, 0, 600));
-    return (saved * 26) / 60;
-  }, [minsNow, minsAfter]);
-
-  const [animatedHours, setAnimatedHours] = useState(targetHours);
-
-  const hoursSaved = animatedHours.toFixed(animatedHours >= 10 ? 0 : 1);
-  const isHighSaving = targetHours >= 20;
-
   const bizumConcept = useMemo(() => buildConcept(bizumName), [bizumName]);
   const bizumQr = useMemo(() => {
     const concept = buildConcept(bizumName);
-    return `https://quickchart.io/qr?text=Bizum%20${BIZUM_NUMBER}%20%7C%205%E2%82%AC%20%7C%20${encodeURIComponent(concept)}`;
+    return `https://quickchart.io/qr?text=Bizum%20${BIZUM_NUMBER}%20%7C%20${encodeURIComponent(BIZUM_AMOUNT)}%20%7C%20${encodeURIComponent(concept)}`;
   }, [bizumName]);
 
   // 4. Effects
-  useEffect(() => {
-    const startValue = animatedHours;
-    const endValue = targetHours;
-    const duration = 400;
-    const startTime = performance.now();
-
-    let animationFrame;
-    const animate = (now) => {
-      const elapsed = now - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      const easeOut = (t) => 1 - Math.pow(1 - t, 3);
-      const current = startValue + (endValue - startValue) * easeOut(progress);
-      setAnimatedHours(current);
-      if (progress < 1) animationFrame = requestAnimationFrame(animate);
-    };
-
-    animationFrame = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(animationFrame);
-  }, [targetHours]);
-
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -248,10 +206,6 @@ export default function Home() {
       setChatStatus("Falta la API Key de Mistral. Añádela en .env.local");
       return;
     }
-    if (!WHAPI_TOKEN && chatPhone) {
-      setChatStatus("Falta la clave de Whapi. Añádela en .env.local o quita el envío a WhatsApp.");
-      return;
-    }
     if (!chatInput.trim() || chatBusy) return;
     const text = chatInput.trim();
     setChatInput("");
@@ -271,21 +225,7 @@ export default function Home() {
     try {
       const reply = await callMistral(history);
       setMessages((prev) => [...prev, { role: "bot", text: reply }]);
-
-      if (chatPhone) {
-        setChatStatus("Enviando a tu WhatsApp...");
-        const to = sanitizePhone(chatPhone);
-        if (to) {
-          const nameLine = chatName ? `Hola ${chatName},` : "Hola,";
-          const body = `${nameLine} aquí tienes la respuesta de la IA:\n\n${reply}\n\nSi necesitas algo más, responde a este WhatsApp.`;
-          await sendWhatsAppMessage(to, body);
-          setChatStatus("Respuesta enviada a tu WhatsApp ✅");
-        } else {
-          setChatStatus("El WhatsApp no parece válido. Usa prefijo país.");
-        }
-      } else {
-        setChatStatus("");
-      }
+      setChatStatus("");
     } catch (err) {
       console.error(err);
       setChatStatus("No pude responder ahora. Intenta de nuevo en unos segundos.");
@@ -336,7 +276,7 @@ export default function Home() {
           </button>
         </div>
 
-        <div className="mobileMenu" id="mobileMenu" hidden={!mobileOpen}>
+        <div className="mobileMenu" id="mobileMenu" style={{ display: mobileOpen ? 'block' : 'none' }}>
           <div className="container mobileMenu__inner">
             <a href="#beneficios" className="mobileMenu__link" onClick={() => setMobileOpen(false)}>
               Qué te llevas
@@ -413,14 +353,14 @@ export default function Home() {
                 <div className="meta__item">
                   <span className="meta__icon">🎟</span>
                   <span>
-                    <strong>5€, plazas limitadas</strong>
+                    <strong>6€, plazas limitadas</strong>
                   </span>
                 </div>
               </div>
 
               <div className="cta">
                 <a className="btn" href="#reserva">
-                  Reservar plaza (5€)
+                  Reservar plaza (6€)
                 </a>
                 <a className="btn btn--ghost" href="#agenda">
                   Ver agenda
@@ -492,114 +432,14 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="roi">
-              <div className="roi__left">
-                <h3>Calculadora de Retorno de Tiempo</h3>
-                <p>
-                  Descubre cuánto tiempo real puedes recuperar al mes automatizando tareas repetitivas con IA (mensajes, redes sociales, planificación).
-                </p>
-                <div className="roi__badge" style={{ marginTop: '16px' }}>
-                  <div className="pill">
-                    <span className="pill__dot"></span>
-                    Ganas <strong>{Math.floor(Number(hoursSaved) / 8)} días</strong> laborales extra al mes
-                  </div>
-                </div>
-              </div>
 
-              <div className="roi__right">
-                <div className="roiCard" style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '16px', padding: '24px', border: '1px solid rgba(255,255,255,0.1)' }}>
-                  <div className="roiCard__header" style={{ marginBottom: '24px', textAlign: 'center' }}>
-                    <div className="micro" style={{ textTransform: 'uppercase', letterSpacing: '1px', opacity: '0.7' }}>Ahorro Mensual Estimado</div>
-                    <div className="roiCard__result" style={{
-                      fontSize: '3rem',
-                      fontWeight: '700',
-                      color: isHighSaving ? '#4ade80' : '#327F4C',
-                      textShadow: isHighSaving ? '0 0 25px rgba(74, 222, 128, 0.5)' : 'none',
-                      transform: isHighSaving ? 'scale(1.1)' : 'scale(1)',
-                      transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
-                    }}>
-                      {hoursSaved} <span style={{ fontSize: '1rem', opacity: '0.8' }}>horas</span>
-                    </div>
-                  </div>
-
-                  <div className="roiCard__chart" style={{ marginBottom: '32px', padding: '0 10px' }}>
-                    <div style={{ marginBottom: '16px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                        <span className="micro" style={{ opacity: 0.6, textTransform: 'uppercase' }}>Situación actual</span>
-                        <span className="mono micro" style={{ opacity: 0.8 }}>{minsNow} min/día</span>
-                      </div>
-                      <div style={{ background: 'rgba(255,255,255,0.05)', height: '8px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                        <div style={{
-                          width: `${(minsNow / 180) * 100}%`,
-                          height: '100%',
-                          background: 'rgba(255,255,255,0.2)',
-                          borderRadius: '4px',
-                          transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
-                        }}></div>
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                        <span className="micro" style={{ color: '#327F4C', fontWeight: '700', textTransform: 'uppercase' }}>Con IA Sin Líos</span>
-                        <span className="mono micro" style={{ color: '#327F4C', fontWeight: '700' }}>{minsAfter} min/día</span>
-                      </div>
-                      <div style={{ background: 'rgba(255,255,255,0.05)', height: '8px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                        <div style={{
-                          width: `${(minsAfter / 180) * 100}%`,
-                          height: '100%',
-                          background: '#327F4C',
-                          borderRadius: '4px',
-                          transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
-                        }}></div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="roiCard__form">
-                    <div className="roiField" style={{ marginBottom: '20px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                        <label htmlFor="minsNow" className="micro">Tiempo actual diario</label>
-                        <span className="mono" style={{ color: '#327F4C' }}>{minsNow} min</span>
-                      </div>
-                      <input
-                        id="minsNow"
-                        type="range"
-                        min="5"
-                        max="180"
-                        step="5"
-                        value={minsNow}
-                        onChange={(e) => setMinsNow(Number(e.target.value))}
-                        style={{ width: '100%', accentColor: '#327F4C' }}
-                      />
-                    </div>
-                    <div className="roiField">
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                        <label htmlFor="minsAfter" className="micro">Tiempo con IA</label>
-                        <span className="mono" style={{ color: '#327F4C' }}>{minsAfter} min</span>
-                      </div>
-                      <input
-                        id="minsAfter"
-                        type="range"
-                        min="0"
-                        max="60"
-                        step="5"
-                        value={minsAfter}
-                        onChange={(e) => setMinsAfter(Number(e.target.value))}
-                        style={{ width: '100%', accentColor: '#327F4C' }}
-                      />
-                    </div>
-                  </div>
-                  <p className="micro" style={{ marginTop: '20px', textAlign: 'center', opacity: '0.5' }}>Basado en 26 días laborables al mes.</p>
-                </div>
-              </div>
-            </div>
           </div>
         </section>
 
         {/* PARA QUIÉN */}
         <section className="section section--dark" id="paraquien">
           <div className="container">
-            <h2>Para quién es</h2>
+            <h2 style={{ textAlign: 'center', marginBottom: '30px' }}>Para quién es</h2>
 
             <div className="grid2">
               <div className="panel">
@@ -627,7 +467,7 @@ export default function Home() {
             <div className="panel panel--highlight">
               <h2>¿Quién imparte la charla?</h2>
               <p className="lead" style={{ marginBottom: '24px' }}>
-                Soy <strong>Manuel Carrasco</strong>. Además de la formación, desarrollo dos proyectos aplicados para el día a día y para pequeños negocios:
+                Soy <strong>Manuel Carrasco García</strong>. Además de la formación, desarrollo dos proyectos aplicados para el día a día y para pequeños negocios:
               </p>
 
               <div className="grid2">
@@ -662,8 +502,8 @@ export default function Home() {
         {/* AGENDA */}
         <section className="section section--dark" id="agenda">
           <div className="container">
-            <h2>Agenda (60 min + tiempo extra)</h2>
-            <p className="section__lead">Formato directo: entender, verlo funcionar y aplicarlo a tu caso.</p>
+            <h2 style={{ textAlign: 'center', marginBottom: '10px' }}>Agenda (60 min + tiempo extra)</h2>
+            <p className="section__lead" style={{ textAlign: 'center', margin: '0 auto 30px' }}>Formato directo: entender, verlo funcionar y aplicarlo a tu caso.</p>
 
             <ol className="timeline">
               <li className="timeline__item">
@@ -701,7 +541,7 @@ export default function Home() {
         {/* LUGAR */}
         <section className="section section--dark" id="lugar">
           <div className="container">
-            <h2>Lugar</h2>
+            <h2 style={{ textAlign: 'center', marginBottom: '30px' }}>Lugar</h2>
 
             <div className="place">
               <div className="place__info">
@@ -712,7 +552,7 @@ export default function Home() {
                   <span className="badge">📱 Solo móvil</span>
                   <span className="badge">🕦 12:00</span>
                   <span className="badge">⏱ 60 min + Q&amp;A</span>
-                  <span className="badge">💫 5€</span>
+                  <span className="badge">💫 6€</span>
                 </div>
 
                 <p className="note">Recomendación: llega 10 minutos antes para entrar y sentarte con calma.</p>
@@ -737,8 +577,8 @@ export default function Home() {
         {/* RESERVA */}
         <section className="section section--dark" id="reserva">
           <div className="container">
-            <h2>Reserva tu plaza</h2>
-            <p className="section__lead">Completa el formulario (30 segundos). Te confirmamos por WhatsApp en menos de 24h.</p>
+            <h2 style={{ textAlign: 'center', marginBottom: '10px' }}>Reserva tu plaza</h2>
+            <p className="section__lead" style={{ textAlign: 'center', margin: '0 auto 30px' }}>Completa el formulario (30 segundos). Te confirmamos por WhatsApp en menos de 24h.</p>
 
             <div className="reserveGrid">
               <div className="reserveCard">
@@ -747,7 +587,7 @@ export default function Home() {
                 <div className="pay pay--boxed">
                   <div className="pay__row">
                     <div className="pay__label">Entrada</div>
-                    <div className="pay__value">5€</div>
+                    <div className="pay__value">6€</div>
                   </div>
                   <div className="pay__row">
                     <div className="pay__label">Bizum</div>
@@ -755,7 +595,7 @@ export default function Home() {
                   </div>
                   <div className="pay__row">
                     <div className="pay__label">Concepto</div>
-                    <div className="pay__value">IA 14FEB + Nombre</div>
+                    <div className="pay__value">{bizumConcept}</div>
                   </div>
 
                   <p className="note">
@@ -767,12 +607,19 @@ export default function Home() {
                 <div className="bizumBox" id="bizumBox">
                   <div className="bizumBox__head">
                     <div>
-                      <h4>Pagar ahora con Bizum</h4>
-                      <p className="micro">Recibes las instrucciones al instante y confirmamos por WhatsApp.</p>
+                      <h4>Pago manual por Bizum</h4>
+                      <p className="micro">Sigue estos pasos y luego envía el justificante por WhatsApp para confirmar la plaza.</p>
                     </div>
                     <div className="bizumBadge" aria-hidden="true">
                       Bizum
                     </div>
+                  </div>
+
+                  <div className="manualSteps" aria-label="Guía de pago manual">
+                    <p className="manualStep">1. Abre Bizum en tu banco y elige “Enviar dinero”.</p>
+                    <p className="manualStep">2. Envía <strong>{BIZUM_AMOUNT}</strong> al número <strong>614 242 716</strong>.</p>
+                    <p className="manualStep">3. Escribe el concepto: <strong>{bizumConcept}</strong>.</p>
+                    <p className="manualStep">4. Envíanos el justificante por WhatsApp para confirmar tu plaza.</p>
                   </div>
 
                   <div className="bizumFields">
@@ -816,28 +663,24 @@ export default function Home() {
                     <div>
                       <div className="micro">Concepto</div>
                       <div className="bizumValue" id="bizumConcept">
-                        IA 14FEB + tu nombre
+                        {bizumConcept}
                       </div>
                     </div>
                   </div>
 
                   <div className="bizumActions">
                     <button className="btn btn--small" id="bizumPayBtn" type="button" onClick={handleBizumOpen}>
-                      Abrir Bizum
+                      Abrir WhatsApp con datos
                     </button>
                     <button className="btn btn--ghost btn--small" id="bizumCopyBtn" type="button" onClick={handleBizumCopy}>
-                      Copiar datos
+                      Copiar datos de pago
                     </button>
                   </div>
 
                   <button className="btn btn--full btn--small" id="bizumSendBtn" type="button" onClick={handleBizumSend}>
-                    Enviarme instrucciones por WhatsApp
+                    Enviarme recordatorio por WhatsApp
                   </button>
-
-                  <div className="bizumQr">
-                    <Image id="bizumQrImg" src={bizumQr} alt="QR con datos de Bizum" width={120} height={120} unoptimized />
-                    <p className="micro">Escanéalo si estás en otro dispositivo.</p>
-                  </div>
+                  <div className="micro">Este mensaje es solo un recordatorio: el pago se hace en tu app bancaria.</div>
 
                   <div className="micro" id="bizumStatus">
                     {bizumStatus}
@@ -864,10 +707,6 @@ export default function Home() {
 
               <div className="formCard">
                 <h3>Formulario</h3>
-                <p className="note">
-                  Inserta aquí tu formulario de Google. Solo tienes que pegar el enlace de inserción en <strong>app/page.jsx</strong>{" "}
-                  (constante <span className="mono">GOOGLE_FORM_EMBED_URL</span>).
-                </p>
 
                 <div className="formWrap" id="formWrap">
                   {GOOGLE_FORM_EMBED_URL ? (
@@ -919,31 +758,6 @@ export default function Home() {
           <button className="chatClose" id="chatClose" aria-label="Cerrar chat" onClick={handleCloseClick}>
             ×
           </button>
-        </div>
-
-        <div className="chatMeta">
-          <label className="field">
-            <span>Tu nombre (opcional)</span>
-            <input
-              type="text"
-              id="chatName"
-              placeholder="Ej. Carlos"
-              autoComplete="name"
-              value={chatName}
-              onChange={(e) => setChatName(e.target.value)}
-            />
-          </label>
-          <label className="field">
-            <span>WhatsApp (para enviarte las respuestas)</span>
-            <input
-              type="tel"
-              id="chatPhone"
-              placeholder="34XXXXXXXXX"
-              autoComplete="tel"
-              value={chatPhone}
-              onChange={(e) => setChatPhone(e.target.value)}
-            />
-          </label>
         </div>
 
         <div className="chatMessages" id="chatMessages">
@@ -1013,5 +827,3 @@ export default function Home() {
     </>
   );
 }
-
-

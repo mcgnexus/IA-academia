@@ -43,7 +43,7 @@ strong {
 }
 
 .highlight {
-  color: var(--red) !important;
+  color: #ffffff !important;
   font-weight: 800 !important;
 }
 
@@ -586,6 +586,21 @@ h1 {
   align-items: center;
 }
 
+.manualSteps {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px dashed rgba(50, 127, 76, .35);
+  border-radius: 14px;
+  background: rgba(50, 127, 76, .08);
+}
+
+.manualStep {
+  margin: 0;
+  font-size: 13px;
+  color: rgba(15, 23, 42, .9);
+}
+
 .bizumBadge {
   background: var(--green);
   color: #fff;
@@ -626,7 +641,14 @@ h1 {
 .bizumValue {
   font-weight: 900;
   font-size: 18px;
-  color: var(--red);
+  color: #ffffff;
+}
+
+.bizumData .micro,
+#bizumAmount,
+#bizumNumber {
+  color: #000000 !important;
+  opacity: 1 !important;
 }
 
 .bizumActions {

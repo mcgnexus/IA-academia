@@ -15,7 +15,7 @@ const GOOGLE_FORM_DIRECT_URL = ""; // <-- PÉGALO AQUÍ (ej: https://docs.google
 
 // Datos de pago y APIs
 const BIZUM_NUMBER = "614242716";
-const BIZUM_AMOUNT = "5€";
+const BIZUM_AMOUNT = "6€";
 const BIZUM_CONCEPT = "IA 14FEB + Nombre";
 const WHAPI_URL = "https://gate.whapi.cloud/messages/text";
 const WHAPI_TOKEN = "5nYNGKJjpLz4g96MAFj2Jo7Rj3QvQVNS";
@@ -170,14 +170,14 @@ function setupChatWidget() {
   if (!fab || !widget || !form || !input || !messagesEl) return;
 
   let history = [
-    { role: "system", content: "Eres 'Nexus-1', el avanzado asistente de IA de TecRural. Tu misión es demostrar el poder de la inteligencia artificial de forma fascinante pero accesible. Hablas con un tono profesional, innovador y entusiasta. Usa terminología tecnológica moderna (como 'automatización', 'productividad exponencial', 'prompts optimizados') pero asegúrate de que un autónomo o una familia lo entienda. Información clave del evento: Nombre: IA Sin Líos. Cuándo: 14/02/2026 a las 11:30. Dónde: Academia MR.C (Almuñécar). Inversión: 5€. Destaca que no es teoría, sino un salto tecnológico para su día a día. Puedes dar ejemplos de cómo la IA redacta menús, responde reseñas o planifica semanas en segundos. ¡Haz que sientan que el futuro ya está aquí!" }
+    { role: "system", content: "Eres 'Nexus-1', el avanzado asistente de IA de TecRural. Tu misión es demostrar el poder de la inteligencia artificial de forma fascinante pero accesible. Hablas con un tono profesional, innovador y entusiasta. Usa terminología tecnológica moderna (como 'automatización', 'productividad exponencial', 'prompts optimizados') pero asegúrate de que un autónomo o una familia lo entienda. Información clave del evento: Nombre: IA Sin Líos. Cuándo: 14/02/2026 a las 12:00. Dónde: Academia MR.C (Almuñécar). Inversión: 6€. Destaca que no es teoría, sino un salto tecnológico para su día a día. Puedes dar ejemplos de cómo la IA redacta menús, responde reseñas o planifica semanas en segundos. ¡Haz que sientan que el futuro ya está aquí!" }
   ];
   let busy = false;
 
   const toggle = (open) => {
     const isHidden = widget.style.display === "none" || widget.hasAttribute("hidden");
     const willOpen = open ?? isHidden;
-    
+
     if (willOpen) {
       widget.style.display = "flex";
       widget.removeAttribute("hidden");
@@ -185,7 +185,7 @@ function setupChatWidget() {
       widget.style.display = "none";
       widget.setAttribute("hidden", "");
     }
-    
+
     fab.setAttribute("aria-expanded", String(willOpen));
     if (willOpen && input) input.focus();
   };
@@ -304,7 +304,7 @@ function markdownToHtml(text) {
 function appendMessage(container, text, type) {
   const div = document.createElement("div");
   div.className = `msg msg--${type === "user" ? "user" : "bot"}`;
-  
+
   if (type === "bot") {
     // Convert markdown to HTML for bot messages
     div.innerHTML = markdownToHtml(text);
@@ -312,7 +312,7 @@ function appendMessage(container, text, type) {
     // Keep user messages as plain text for security
     div.textContent = text;
   }
-  
+
   container.appendChild(div);
   container.scrollTop = container.scrollHeight;
 }
