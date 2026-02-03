@@ -1079,8 +1079,11 @@ h3 {
   color: var(--ink);
   font-size: 14px;
   line-height: 1.35;
-  white-space: pre-wrap;
   word-break: break-word;
+}
+
+.msg__spacing {
+  height: 8px;
 }
 
 .msg--user {

@@ -14,6 +14,17 @@ function buildConcept(name) {
   return "IA 14FEB + Nombre";
 }
 
+function formatMessage(text) {
+  if (!text) return "";
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/`(.*?)`/g, '<code>$1</code>')
+    .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/\n\n/g, '<div class="msg__spacing"></div>')
+    .replace(/\n/g, '<br />');
+}
+
 function sanitizePhone(raw) {
   if (!raw) return "";
   const digits = raw.replace(/\D/g, "");
@@ -735,7 +746,11 @@ export default function Home() {
         <div className="chatMessages" id="chatMessages">
           {messages.map((m, idx) => (
             <div key={idx} className={`msg msg--${m.role === "user" ? "user" : "bot"}`}>
-              <span className="msgText">{m.text}</span>
+              {m.role === "bot" ? (
+                <span className="msgText" dangerouslySetInnerHTML={{ __html: formatMessage(m.text) }} />
+              ) : (
+                <span className="msgText">{m.text}</span>
+              )}
             </div>
           ))}
           <div ref={messagesEndRef} />

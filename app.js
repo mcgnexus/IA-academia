@@ -281,11 +281,27 @@ async function sendWhatsAppMessage(to, body) {
   return res.json();
 }
 
+function markdownToHtml(text) {
+  if (!text) return "";
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/`(.*?)`/g, '<code>$1</code>')
+    .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/\n\n/g, '<div class="msg__spacing"></div>')
+    .replace(/\n/g, '<br />');
+}
+
 function appendMessage(container, text, type) {
   const div = document.createElement("div");
   div.className = `msg msg--${type === "user" ? "user" : "bot"}`;
 
-  div.textContent = text;
+  if (type === "bot") {
+    div.innerHTML = `<span class="msgText">${markdownToHtml(text)}</span>`;
+  } else {
+    div.innerHTML = `<span class="msgText"></span>`;
+    div.querySelector(".msgText").textContent = text;
+  }
 
   container.appendChild(div);
   container.scrollTop = container.scrollHeight;
