@@ -8,14 +8,6 @@ const GOOGLE_FORM_DIRECT_URL = "https://docs.google.com/forms/d/e/1FAIpQLSf-donb
 
 const BIZUM_NUMBER = "614242716";
 const BIZUM_AMOUNT = "6€";
-const WHAPI_TOKEN = process.env.NEXT_PUBLIC_WHAPI_TOKEN || "";
-const MISTRAL_API_KEY = process.env.NEXT_PUBLIC_MISTRAL_API_KEY || "";
-
-const systemPrompt =
-  "Eres 'Nexus-1', el avanzado asistente de IA de TecRural. Tu misión es demostrar el poder de la inteligencia artificial de forma fascinante pero accesible. Hablas con un tono profesional, innovador y entusiasta. Usa terminología tecnológica moderna (como 'automatización', 'productividad exponencial', 'prompts optimizados') pero asegúrate de que un autónomo o una familia lo entienda. " +
-  "Información clave del evento: Nombre: IA Sin Líos. Cuándo: 14/02/2026 a las 12:00. Dónde: Academia MR.C (Almuñécar). Inversión: 6€. " +
-  "Destaca que no es teoría, sino un salto tecnológico para su día a día. Puedes dar ejemplos de cómo la IA redacta menús, responde reseñas o planifica semanas en segundos. ¡Haz que sientan que el futuro ya está aquí!";
-
 /* ---------- helpers ---------- */
 function buildConcept(name) {
   if (name && name.trim().length > 1) return `IA 14FEB + ${name.trim()}`;
@@ -31,35 +23,24 @@ function sanitizePhone(raw) {
   return digits;
 }
 
-async function callMistral(history) {
-  const res = await fetch("https://api.mistral.ai/v1/chat/completions", {
+async function callChatApi(messages) {
+  const res = await fetch("/api/chat", {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.NEXT_PUBLIC_MISTRAL_API_KEY || ""}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "mistral-small",
-      messages: history,
-      temperature: 0.4,
-      max_tokens: 450,
-    }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messages }),
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Mistral error: ${res.status} ${text}`);
+    throw new Error(`Chat error: ${res.status} ${text}`);
   }
   const data = await res.json();
-  return data?.choices?.[0]?.message?.content?.trim() || "Sin respuesta, prueba de nuevo.";
+  return data?.reply?.trim() || "Sin respuesta, prueba de nuevo.";
 }
 
 async function sendWhatsAppMessage(to, body) {
-  const res = await fetch("https://gate.whapi.cloud/messages/text", {
+  const res = await fetch("/api/whatsapp", {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.NEXT_PUBLIC_WHAPI_TOKEN || ""}`,
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ to, body }),
   });
   if (!res.ok) {
@@ -169,10 +150,6 @@ export default function Home() {
   };
 
   const handleBizumSend = async () => {
-    if (!WHAPI_TOKEN) {
-      setBizumStatus("Falta la clave de Whapi. Añádela en .env.local");
-      return;
-    }
     if (!bizumPhone) {
       setBizumStatus("Escribe tu WhatsApp para mandarte las instrucciones.");
       return;
@@ -202,10 +179,6 @@ export default function Home() {
 
   const handleChatSubmit = async (e) => {
     e.preventDefault();
-    if (!MISTRAL_API_KEY) {
-      setChatStatus("Falta la API Key de Mistral. Añádela en .env.local");
-      return;
-    }
     if (!chatInput.trim() || chatBusy) return;
     const text = chatInput.trim();
     setChatInput("");
@@ -214,7 +187,6 @@ export default function Home() {
     setChatStatus("Pensando...");
 
     const history = [
-      { role: "system", content: systemPrompt },
       ...messages.map((m) => ({
         role: m.role === "user" ? "user" : "assistant",
         content: m.text,
@@ -223,7 +195,7 @@ export default function Home() {
     ];
 
     try {
-      const reply = await callMistral(history);
+      const reply = await callChatApi(history);
       setMessages((prev) => [...prev, { role: "bot", text: reply }]);
       setChatStatus("");
     } catch (err) {
@@ -763,18 +735,7 @@ export default function Home() {
         <div className="chatMessages" id="chatMessages">
           {messages.map((m, idx) => (
             <div key={idx} className={`msg msg--${m.role === "user" ? "user" : "bot"}`}>
-              {m.role === "bot" ? (
-                <span dangerouslySetInnerHTML={{
-                  __html: m.text
-                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                    .replace(/`(.*?)`/g, '<code>$1</code>')
-                    .replace(/\n/g, '<br>')
-                    .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
-                }} />
-              ) : (
-                m.text
-              )}
+              <span className="msgText">{m.text}</span>
             </div>
           ))}
           <div ref={messagesEndRef} />

@@ -14,8 +14,8 @@ En `app/page.jsx` ajusta:
 
 ## Variables de entorno (.env.local)
 ```
-NEXT_PUBLIC_MISTRAL_API_KEY=cfPicyj4KrOosgDLcSTYF0NAtaewbP9q
-NEXT_PUBLIC_WHAPI_TOKEN=5nYNGKJjpLz4g96MAFj2Jo7Rj3QvQVNS
+MISTRAL_API_KEY=REEMPLAZA_CON_TU_CLAVE
+WHAPI_TOKEN=REEMPLAZA_CON_TU_TOKEN
 NEXT_PUBLIC_SITE_URL=https://tusitio.com   # opcional, para OG/base URL
 ```
 > Nota: al usar el prefijo `NEXT_PUBLIC_` las claves siguen siendo visibles en el frontend; lo ideal sigue siendo un backend/proxy que oculte secretos.

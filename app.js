@@ -17,11 +17,8 @@ const GOOGLE_FORM_DIRECT_URL = ""; // <-- PÉGALO AQUÍ (ej: https://docs.google
 const BIZUM_NUMBER = "614242716";
 const BIZUM_AMOUNT = "6€";
 const BIZUM_CONCEPT = "IA 14FEB + Nombre";
-const WHAPI_URL = "https://gate.whapi.cloud/messages/text";
-const WHAPI_TOKEN = "5nYNGKJjpLz4g96MAFj2Jo7Rj3QvQVNS";
-const MISTRAL_URL = "https://api.mistral.ai/v1/chat/completions";
-const MISTRAL_MODEL = "mistral-small";
-const MISTRAL_API_KEY = "cfPicyj4KrOosgDLcSTYF0NAtaewbP9q";
+const CHAT_API_URL = "/api/chat";
+const WHATSAPP_API_URL = "/api/whatsapp";
 
 function setFormEmbed() {
   const wrap = document.getElementById("formWrap");
@@ -169,9 +166,7 @@ function setupChatWidget() {
 
   if (!fab || !widget || !form || !input || !messagesEl) return;
 
-  let history = [
-    { role: "system", content: "Eres 'Nexus-1', el avanzado asistente de IA de TecRural. Tu misión es demostrar el poder de la inteligencia artificial de forma fascinante pero accesible. Hablas con un tono profesional, innovador y entusiasta. Usa terminología tecnológica moderna (como 'automatización', 'productividad exponencial', 'prompts optimizados') pero asegúrate de que un autónomo o una familia lo entienda. Información clave del evento: Nombre: IA Sin Líos. Cuándo: 14/02/2026 a las 12:00. Dónde: Academia MR.C (Almuñécar). Inversión: 6€. Destaca que no es teoría, sino un salto tecnológico para su día a día. Puedes dar ejemplos de cómo la IA redacta menús, responde reseñas o planifica semanas en segundos. ¡Haz que sientan que el futuro ya está aquí!" }
-  ];
+  let history = [];
   let busy = false;
 
   const toggle = (open) => {
@@ -224,7 +219,7 @@ function setupChatWidget() {
     history.push({ role: "user", content: text });
 
     try {
-      const reply = await callMistral(history);
+      const reply = await callChatApi(history);
       history.push({ role: "assistant", content: reply });
       appendMessage(messagesEl, reply, "bot");
       setStatus(statusEl, phoneInput?.value ? "Enviando a tu WhatsApp..." : "");
@@ -253,33 +248,28 @@ function setupChatWidget() {
 }
 
 /* ---------- Helpers ---------- */
-async function callMistral(history) {
-  const res = await fetch(MISTRAL_URL, {
+async function callChatApi(history) {
+  const res = await fetch(CHAT_API_URL, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${MISTRAL_API_KEY}`,
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      model: MISTRAL_MODEL,
-      messages: history,
-      temperature: 0.4,
-      max_tokens: 450
+      messages: history
     })
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Mistral error: ${res.status} ${text}`);
+    throw new Error(`Chat error: ${res.status} ${text}`);
   }
   const data = await res.json();
-  return data?.choices?.[0]?.message?.content?.trim() || "Sin respuesta, prueba de nuevo.";
+  return data?.reply?.trim() || "Sin respuesta, prueba de nuevo.";
 }
 
 async function sendWhatsAppMessage(to, body) {
-  const res = await fetch(WHAPI_URL, {
+  const res = await fetch(WHATSAPP_API_URL, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${WHAPI_TOKEN}`,
       "Content-Type": "application/json"
     },
     body: JSON.stringify({ to, body })
@@ -291,27 +281,11 @@ async function sendWhatsAppMessage(to, body) {
   return res.json();
 }
 
-function markdownToHtml(text) {
-  // Convert markdown to basic HTML
-  return text
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // **bold**
-    .replace(/\*(.*?)\*/g, '<em>$1</em>') // *italic*
-    .replace(/`(.*?)`/g, '<code>$1</code>') // `code`
-    .replace(/\n/g, '<br>') // line breaks
-    .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>'); // [link](url)
-}
-
 function appendMessage(container, text, type) {
   const div = document.createElement("div");
   div.className = `msg msg--${type === "user" ? "user" : "bot"}`;
 
-  if (type === "bot") {
-    // Convert markdown to HTML for bot messages
-    div.innerHTML = markdownToHtml(text);
-  } else {
-    // Keep user messages as plain text for security
-    div.textContent = text;
-  }
+  div.textContent = text;
 
   container.appendChild(div);
   container.scrollTop = container.scrollHeight;
