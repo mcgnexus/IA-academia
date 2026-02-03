@@ -3,8 +3,8 @@
 import Image from "next/image";
 import { useMemo, useState, useRef, useEffect } from "react";
 
-const GOOGLE_FORM_EMBED_URL = "";
-const GOOGLE_FORM_DIRECT_URL = "";
+const GOOGLE_FORM_EMBED_URL = "https://docs.google.com/forms/d/e/1FAIpQLSf-donb7o4oAWk40ecIzNdnLqPioea2EXLQ8H13GitEe5fXeQ/viewform?embedded=true";
+const GOOGLE_FORM_DIRECT_URL = "https://docs.google.com/forms/d/e/1FAIpQLSf-donb7o4oAWk40ecIzNdnLqPioea2EXLQ8H13GitEe5fXeQ/viewform";
 
 const BIZUM_NUMBER = "614242716";
 const BIZUM_AMOUNT = "5€";
@@ -17,31 +17,147 @@ const MISTRAL_API_KEY = process.env.NEXT_PUBLIC_MISTRAL_API_KEY || "";
 
 const systemPrompt =
   "Eres 'Nexus-1', el avanzado asistente de IA de TecRural. Tu misión es demostrar el poder de la inteligencia artificial de forma fascinante pero accesible. Hablas con un tono profesional, innovador y entusiasta. Usa terminología tecnológica moderna (como 'automatización', 'productividad exponencial', 'prompts optimizados') pero asegúrate de que un autónomo o una familia lo entienda. " +
-  "Información clave del evento: Nombre: IA Sin Líos. Cuándo: 14/02/2026 a las 11:30. Dónde: Academia MR.C (Almuñécar). Inversión: 5€. " +
+  "Información clave del evento: Nombre: IA Sin Líos. Cuándo: 14/02/2026 a las 12:00. Dónde: Academia MR.C (Almuñécar). Inversión: 5€. " +
   "Destaca que no es teoría, sino un salto tecnológico para su día a día. Puedes dar ejemplos de cómo la IA redacta menús, responde reseñas o planifica semanas en segundos. ¡Haz que sientan que el futuro ya está aquí!";
 
-export default function Home() {
-  const [mobileOpen, setMobileOpen] = useState(false);
+/* ---------- helpers ---------- */
+function clamp(n, min, max) {
+  return Math.max(min, Math.min(max, n));
+}
 
+function buildConcept(name) {
+  if (name && name.trim().length > 1) return `IA 14FEB + ${name.trim()}`;
+  return "IA 14FEB + Nombre";
+}
+
+function sanitizePhone(raw) {
+  if (!raw) return "";
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("0")) return "";
+  if (digits.length === 9) return "34" + digits; // asume España sin prefijo
+  return digits;
+}
+
+async function callMistral(history) {
+  const res = await fetch("https://api.mistral.ai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.NEXT_PUBLIC_MISTRAL_API_KEY || ""}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "mistral-small",
+      messages: history,
+      temperature: 0.4,
+      max_tokens: 450,
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Mistral error: ${res.status} ${text}`);
+  }
+  const data = await res.json();
+  return data?.choices?.[0]?.message?.content?.trim() || "Sin respuesta, prueba de nuevo.";
+}
+
+async function sendWhatsAppMessage(to, body) {
+  const res = await fetch("https://gate.whapi.cloud/messages/text", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.NEXT_PUBLIC_WHAPI_TOKEN || ""}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ to, body }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`WHAPI error: ${res.status} ${text}`);
+  }
+  return res.json();
+}
+
+async function copyToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+
+export default function Home() {
+  // 1. Refs
+  const chatRef = useRef(null);
+  const fabRef = useRef(null);
+  const messagesEndRef = useRef(null);
+
+  // 2. States
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [minsNow, setMinsNow] = useState(30);
   const [minsAfter, setMinsAfter] = useState(10);
-  const hoursSaved = useMemo(() => {
-    const saved = Math.max(0, clamp(minsNow, 0, 600) - clamp(minsAfter, 0, 600));
-    return ((saved * 30) / 60).toFixed(((saved * 30) / 60) >= 10 ? 0 : 1);
-  }, [minsNow, minsAfter]);
-
   const [bizumName, setBizumName] = useState("");
   const [bizumPhone, setBizumPhone] = useState("");
   const [bizumStatus, setBizumStatus] = useState("");
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatInput, setChatInput] = useState("");
+  const [chatName, setChatName] = useState("");
+  const [chatPhone, setChatPhone] = useState("");
+  const [chatStatus, setChatStatus] = useState("");
+  const [chatBusy, setChatBusy] = useState(false);
+  const [messages, setMessages] = useState([
+    {
+      role: "bot",
+      text: "¡Hola! Soy Nexus-1. Estoy procesando datos para ayudarte a optimizar tu tiempo. ¿Quieres saber cómo la IA va a transformar tu negocio o tienes dudas sobre nuestro evento en Almuñécar?",
+    },
+  ]);
+
+  // 3. Memos
+  const targetHours = useMemo(() => {
+    const saved = Math.max(0, clamp(minsNow, 0, 600) - clamp(minsAfter, 0, 600));
+    return (saved * 26) / 60;
+  }, [minsNow, minsAfter]);
+
+  const [animatedHours, setAnimatedHours] = useState(targetHours);
+
+  const hoursSaved = animatedHours.toFixed(animatedHours >= 10 ? 0 : 1);
+  const isHighSaving = targetHours >= 20;
 
   const bizumConcept = useMemo(() => buildConcept(bizumName), [bizumName]);
   const bizumQr = useMemo(() => {
-    return `https://quickchart.io/qr?text=Bizum%20${BIZUM_NUMBER}%20%7C%205%E2%82%AC%20%7C%20${encodeURIComponent(bizumConcept)}`;
-  }, [bizumConcept]);
+    const concept = buildConcept(bizumName);
+    return `https://quickchart.io/qr?text=Bizum%20${BIZUM_NUMBER}%20%7C%205%E2%82%AC%20%7C%20${encodeURIComponent(concept)}`;
+  }, [bizumName]);
 
-  const [chatOpen, setChatOpen] = useState(false);
-  const chatRef = useRef(null);
-  const fabRef = useRef(null);
+  // 4. Effects
+  useEffect(() => {
+    const startValue = animatedHours;
+    const endValue = targetHours;
+    const duration = 400;
+    const startTime = performance.now();
+
+    let animationFrame;
+    const animate = (now) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+      const current = startValue + (endValue - startValue) * easeOut(progress);
+      setAnimatedHours(current);
+      if (progress < 1) animationFrame = requestAnimationFrame(animate);
+    };
+
+    animationFrame = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animationFrame);
+  }, [targetHours]);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    if (chatOpen) scrollToBottom();
+  }, [messages, chatOpen]);
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -58,17 +174,6 @@ export default function Home() {
     document.addEventListener("mousedown", handleClickOutside, { passive: true });
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [chatOpen]);
-  const [chatInput, setChatInput] = useState("");
-  const [chatName, setChatName] = useState("");
-  const [chatPhone, setChatPhone] = useState("");
-  const [chatStatus, setChatStatus] = useState("");
-  const [chatBusy, setChatBusy] = useState(false);
-  const [messages, setMessages] = useState([
-    {
-      role: "bot",
-      text: "¡Hola! Soy Nexus-1. Estoy procesando datos para ayudarte a optimizar tu tiempo. ¿Quieres saber cómo la IA va a transformar tu negocio o tienes dudas sobre nuestro evento en Almuñécar?",
-    },
-  ]);
 
   const toggleChat = (open) => {
     const next = typeof open === "boolean" ? open : !chatOpen;
@@ -202,7 +307,7 @@ export default function Home() {
       <header className="topbar" id="top">
         <div className="container topbar__inner">
           <div className="brand">
-            <Image className="brand__logo" src="/assets/tecrural-logo.png" alt="TecRural" width={38} height={38} priority />
+            <Image className="brand__logo" src="/assets/tecrural-official-logo.jpg" alt="TecRural" width={38} height={38} priority />
             <div className="brand__text">
               <div className="brand__name">TecRural</div>
               <div className="brand__sub">con FidesDigital</div>
@@ -260,46 +365,55 @@ export default function Home() {
               </div>
 
               <h1>
-                IA Sin Líos
+                De, no tengo tiempo a, lo tengo hecho:
                 <br />
-                Ahorra tiempo desde hoy
+                IA para la familia y el trabajo.
               </h1>
 
               <p className="lead">
-                Para <strong>autónomos</strong>, <strong>pequeños negocios</strong> y <strong>familias</strong>. Sales con
-                atajos listos para usar en <strong>mensajes</strong>, <strong>reseñas</strong>,<strong> carteles</strong> y{" "}
-                <strong>organización diaria</strong>.
+                No te quedes atrás: aprende a integrar la IA en tu vida diaria para competir con ventaja. Sin tecnicismos.
               </p>
+
+              <div className="hero__benefits">
+                <div className="benefit">
+                  <div className="benefit__icon">⚙️</div>
+                  <div className="benefit__text">
+                    La IA no te quitará tu puesto de trabajo, lo hará alguien que sepa usarla; aprende a ser esa persona imprescindible y blinda tu futuro hoy mismo.
+                  </div>
+                </div>
+                <div className="benefit">
+                  <div className="benefit__icon">🛡️</div>
+                  <div className="benefit__text">
+                    ¿Te falta tiempo libre? usando la IA conseguirás hasta un 40% más.
+                  </div>
+                </div>
+                <div className="benefit">
+                  <div className="benefit__icon">📱</div>
+                  <div className="benefit__text">
+                    No necesitas ser informático, solo necesitas saber utilizar tu móvil, que se convertirá en tu mejor ayudante para todo.
+                  </div>
+                </div>
+              </div>
+
+              <h2 className="hero__subtitle">Curso de Introducción a la Inteligencia Artificial</h2>
 
               <div className="meta">
                 <div className="meta__item">
+                  <span className="meta__icon">📍</span>
+                  <span>
+                    <strong>Academia MR.C</strong>
+                  </span>
+                </div>
+                <div className="meta__item">
                   <span className="meta__icon">📅</span>
                   <span>
-                    <strong>Sábado 14/02/2026</strong>
-                  </span>
-                </div>
-                <div className="meta__item">
-                  <span className="meta__icon">🕦</span>
-                  <span>
-                    <strong>11:30</strong>
-                  </span>
-                </div>
-                <div className="meta__item">
-                  <span className="meta__icon">⏱</span>
-                  <span>
-                    <strong>90 min</strong>
-                  </span>
-                </div>
-                <div className="meta__item">
-                  <span className="meta__icon">👥</span>
-                  <span>
-                    <strong>30 plazas</strong>
+                    <strong>14 febrero 2026</strong>
                   </span>
                 </div>
                 <div className="meta__item">
                   <span className="meta__icon">🎟</span>
                   <span>
-                    <strong>5€</strong>
+                    <strong>5€, plazas limitadas</strong>
                   </span>
                 </div>
               </div>
@@ -320,55 +434,25 @@ export default function Home() {
               </div>
             </div>
 
-            <aside className="hero__card">
-              <div className="card">
-                <h2 className="card__title">En 90 minutos, te llevas:</h2>
-                <ul className="list">
-                  <li>Plantillas para responder WhatsApp y reseñas sin sonar “robot”.</li>
-                  <li>Un método para que “escriba a tu estilo”.</li>
-                  <li>Un post/cartel listo (y repetible) en 10 minutos.</li>
-                  <li>Un plan simple de 7 días para notar resultados.</li>
-                </ul>
-
-                <div className="divider"></div>
-
-                <div className="pay">
-                  <div className="pay__row">
-                    <div className="pay__label">Entrada</div>
-                    <div className="pay__value">5€</div>
-                  </div>
-                  <div className="pay__row">
-                    <div className="pay__label">Bizum</div>
-                    <div className="pay__value">614 242 716</div>
-                  </div>
-                  <div className="pay__row">
-                    <div className="pay__label">Concepto</div>
-                    <div className="pay__value">IA 14FEB + Nombre</div>
-                  </div>
-                  <p className="note">
-                    La plaza se confirma por orden de pago. Si prefieres pagar allí, indícalo en el formulario (sujeto a
-                    disponibilidad).
-                  </p>
-                </div>
-
-                <a className="btn btn--full" href="#reserva">
-                  Reservar ahora
-                </a>
-
-                <div className="micro">
-                  ¿Dudas? WhatsApp{" "}
-                  <a href="https://wa.me/34614242716" target="_blank" rel="noopener">
-                    614 242 716
-                  </a>{" "}
-                  · Email <a href="mailto:mcgnexus@gmail.com">mcgnexus@gmail.com</a>
-                </div>
+            <aside className="hero__image-container">
+              <Image
+                src="/assets/hero-image.png"
+                alt="Profesionales usando IA"
+                className="hero__image-diagonal"
+                width={420}
+                height={420}
+                priority
+              />
+              <div className="hero__ai-badge">
+                <span className="ai-badge__icon">🤖</span>
+                <span className="ai-badge__text">AI</span>
               </div>
             </aside>
           </div>
         </section>
 
         {/* BENEFICIOS */}
-        <section className="section" id="beneficios">
+        <section className="section section--dark" id="beneficios">
           <div className="container">
             <h2>Qué te llevas (sin humo)</h2>
             <p className="section__lead">
@@ -410,48 +494,102 @@ export default function Home() {
 
             <div className="roi">
               <div className="roi__left">
-                <h3>El cálculo (tiempo real recuperado)</h3>
+                <h3>Calculadora de Retorno de Tiempo</h3>
                 <p>
-                  Si hoy te vas a <strong>30 min/día</strong> en mensajes, textos y “qué publico hoy”, y lo bajas a{" "}
-                  <strong>10 min/día</strong>, recuperas <strong>~10 horas al mes</strong>.
+                  Descubre cuánto tiempo real puedes recuperar al mes automatizando tareas repetitivas con IA (mensajes, redes sociales, planificación).
                 </p>
-                <p className="note">Eso es tiempo para facturar más… o para vivir mejor.</p>
+                <div className="roi__badge" style={{ marginTop: '16px' }}>
+                  <div className="pill">
+                    <span className="pill__dot"></span>
+                    Ganas <strong>{Math.floor(Number(hoursSaved) / 8)} días</strong> laborales extra al mes
+                  </div>
+                </div>
               </div>
 
               <div className="roi__right">
-                <div className="roiBox">
-                  <div className="roiBox__label">Tu tiempo al mes</div>
-                  <div className="roiBox__value">
-                    <span id="hoursSaved">{hoursSaved}</span> horas
+                <div className="roiCard" style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '16px', padding: '24px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                  <div className="roiCard__header" style={{ marginBottom: '24px', textAlign: 'center' }}>
+                    <div className="micro" style={{ textTransform: 'uppercase', letterSpacing: '1px', opacity: '0.7' }}>Ahorro Mensual Estimado</div>
+                    <div className="roiCard__result" style={{
+                      fontSize: '3rem',
+                      fontWeight: '700',
+                      color: isHighSaving ? '#4ade80' : '#327F4C',
+                      textShadow: isHighSaving ? '0 0 25px rgba(74, 222, 128, 0.5)' : 'none',
+                      transform: isHighSaving ? 'scale(1.1)' : 'scale(1)',
+                      transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+                    }}>
+                      {hoursSaved} <span style={{ fontSize: '1rem', opacity: '0.8' }}>horas</span>
+                    </div>
                   </div>
-                  <div className="roiBox__controls" aria-label="Ajusta tu situación">
-                    <label>
-                      Minutos al día ahora:
+
+                  <div className="roiCard__chart" style={{ marginBottom: '32px', padding: '0 10px' }}>
+                    <div style={{ marginBottom: '16px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                        <span className="micro" style={{ opacity: 0.6, textTransform: 'uppercase' }}>Situación actual</span>
+                        <span className="mono micro" style={{ opacity: 0.8 }}>{minsNow} min/día</span>
+                      </div>
+                      <div style={{ background: 'rgba(255,255,255,0.05)', height: '8px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                        <div style={{
+                          width: `${(minsNow / 180) * 100}%`,
+                          height: '100%',
+                          background: 'rgba(255,255,255,0.2)',
+                          borderRadius: '4px',
+                          transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
+                        }}></div>
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                        <span className="micro" style={{ color: '#327F4C', fontWeight: '700', textTransform: 'uppercase' }}>Con IA Sin Líos</span>
+                        <span className="mono micro" style={{ color: '#327F4C', fontWeight: '700' }}>{minsAfter} min/día</span>
+                      </div>
+                      <div style={{ background: 'rgba(255,255,255,0.05)', height: '8px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                        <div style={{
+                          width: `${(minsAfter / 180) * 100}%`,
+                          height: '100%',
+                          background: '#327F4C',
+                          borderRadius: '4px',
+                          transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
+                        }}></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="roiCard__form">
+                    <div className="roiField" style={{ marginBottom: '20px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                        <label htmlFor="minsNow" className="micro">Tiempo actual diario</label>
+                        <span className="mono" style={{ color: '#327F4C' }}>{minsNow} min</span>
+                      </div>
                       <input
                         id="minsNow"
-                        type="number"
+                        type="range"
                         min="5"
                         max="180"
+                        step="5"
                         value={minsNow}
-                        onChange={(e) => setMinsNow(Number(e.target.value || 0))}
+                        onChange={(e) => setMinsNow(Number(e.target.value))}
+                        style={{ width: '100%', accentColor: '#327F4C' }}
                       />
-                    </label>
-                    <label>
-                      Minutos al día con atajos:
+                    </div>
+                    <div className="roiField">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                        <label htmlFor="minsAfter" className="micro">Tiempo con IA</label>
+                        <span className="mono" style={{ color: '#327F4C' }}>{minsAfter} min</span>
+                      </div>
                       <input
                         id="minsAfter"
-                        type="number"
-                        min="5"
-                        max="180"
+                        type="range"
+                        min="0"
+                        max="60"
+                        step="5"
                         value={minsAfter}
-                        onChange={(e) => setMinsAfter(Number(e.target.value || 0))}
+                        onChange={(e) => setMinsAfter(Number(e.target.value))}
+                        style={{ width: '100%', accentColor: '#327F4C' }}
                       />
-                    </label>
-                    <button className="btn btn--small" type="button">
-                      Calcular
-                    </button>
+                    </div>
                   </div>
-                  <p className="micro">Cálculo con 30 días/mes (aprox.).</p>
+                  <p className="micro" style={{ marginTop: '20px', textAlign: 'center', opacity: '0.5' }}>Basado en 26 días laborables al mes.</p>
                 </div>
               </div>
             </div>
@@ -459,7 +597,7 @@ export default function Home() {
         </section>
 
         {/* PARA QUIÉN */}
-        <section className="section section--soft" id="paraquien">
+        <section className="section section--dark" id="paraquien">
           <div className="container">
             <h2>Para quién es</h2>
 
@@ -483,39 +621,77 @@ export default function Home() {
           </div>
         </section>
 
-        {/* AGENDA */}
-        <section className="section" id="agenda">
+        {/* PONENTE */}
+        <section className="section section--dark" id="ponente">
           <div className="container">
-            <h2>Agenda (90 min)</h2>
+            <div className="panel panel--highlight">
+              <h2>¿Quién imparte la charla?</h2>
+              <p className="lead" style={{ marginBottom: '24px' }}>
+                Soy <strong>Manuel Carrasco</strong>. Además de la formación, desarrollo dos proyectos aplicados para el día a día y para pequeños negocios:
+              </p>
+
+              <div className="grid2">
+                <div className="feature">
+                  <div className="feature__icon" style={{ background: 'transparent', overflow: 'hidden', padding: '0' }}>
+                    <Image src="/assets/tecrural-official-logo.jpg" alt="Logo TecRural" width={48} height={48} style={{ objectFit: 'cover' }} />
+                  </div>
+                  <h3>TecRural</h3>
+                  <p>Soluciones prácticas para agricultura y ganaderia (organización, avisos, control y ahorro de tiempo en tareas repetitivas).</p>
+                </div>
+                <div className="feature">
+                  <div className="feature__icon" style={{ background: 'transparent', overflow: 'hidden', padding: '0' }}>
+                    <Image src="/assets/fidesdigital-logo.png" alt="Logo FidesDigital" width={48} height={48} style={{ objectFit: 'contain' }} />
+                  </div>
+                  <h3>FidesDigital</h3>
+                  <p>Implementa aplicaciones web para el uso religioso y eclesiastico (textos, carteles, organización y atención al cliente).</p>
+                </div>
+              </div>
+
+              <div className="divider" style={{ opacity: '0.2', margin: '30px 0' }}></div>
+
+              <p className="lead" style={{ fontWeight: '700', color: '#fff' }}>
+                Esta charla no es teoría: está pensada para que salgas con ideas y plantillas listas para usar en tu trabajo o en casa.
+              </p>
+              <p className="muted" style={{ fontSize: '15px' }}>
+                (En Almuñécar lo que importa es que funcione y te ahorre tiempo).
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* AGENDA */}
+        <section className="section section--dark" id="agenda">
+          <div className="container">
+            <h2>Agenda (60 min + tiempo extra)</h2>
             <p className="section__lead">Formato directo: entender, verlo funcionar y aplicarlo a tu caso.</p>
 
             <ol className="timeline">
               <li className="timeline__item">
-                <div className="timeline__time">15 min</div>
-                <div className="timeline__content">
-                  <h3>Entender sin miedo</h3>
-                  <p>Mitos vs realidad y qué tareas te quita de encima desde esta semana.</p>
-                </div>
-              </li>
-              <li className="timeline__item">
-                <div className="timeline__time">45 min</div>
-                <div className="timeline__content">
-                  <h3>Casos reales (Almuñécar)</h3>
-                  <p>Mensajes, reservas, reseñas, carteles, posts y organización diaria.</p>
-                </div>
-              </li>
-              <li className="timeline__item">
-                <div className="timeline__time">20 min</div>
-                <div className="timeline__content">
-                  <h3>Mini‑taller: tu caso</h3>
-                  <p>Eliges un problema y lo resolvemos en directo con una plantilla reutilizable.</p>
-                </div>
-              </li>
-              <li className="timeline__item">
                 <div className="timeline__time">10 min</div>
                 <div className="timeline__content">
-                  <h3>Plan simple de 7 días</h3>
-                  <p>Qué hacer la primera semana para notar resultados sin agobio.</p>
+                  <h3>Entender sin miedo</h3>
+                  <p>Mitos vs realidad y los atajos básicos que te ahorrarán tiempo desde el primer día.</p>
+                </div>
+              </li>
+              <li className="timeline__item">
+                <div className="timeline__time">35 min</div>
+                <div className="timeline__content">
+                  <h3>Casos reales (Almuñécar)</h3>
+                  <p>Veremos cómo responder mensajes y reseñas, y crear carteles o posts en segundos.</p>
+                </div>
+              </li>
+              <li className="timeline__item">
+                <div className="timeline__time">15 min</div>
+                <div className="timeline__content">
+                  <h3>Mini‑taller: tu caso</h3>
+                  <p>Eliges un problema real y vemos cómo lo resolvería la IA con un ejemplo práctico.</p>
+                </div>
+              </li>
+              <li className="timeline__item">
+                <div className="timeline__time">🔥</div>
+                <div className="timeline__content">
+                  <h3>Q&amp;A + Propuesta</h3>
+                  <p>Tiempo extra para resolver tus dudas específicas y cómo seguir avanzando sin líos.</p>
                 </div>
               </li>
             </ol>
@@ -523,7 +699,7 @@ export default function Home() {
         </section>
 
         {/* LUGAR */}
-        <section className="section section--soft" id="lugar">
+        <section className="section section--dark" id="lugar">
           <div className="container">
             <h2>Lugar</h2>
 
@@ -534,8 +710,8 @@ export default function Home() {
 
                 <div className="place__badges">
                   <span className="badge">📱 Solo móvil</span>
-                  <span className="badge">🕦 11:30</span>
-                  <span className="badge">⏱ 90 min</span>
+                  <span className="badge">🕦 12:00</span>
+                  <span className="badge">⏱ 60 min + Q&amp;A</span>
                   <span className="badge">💫 5€</span>
                 </div>
 
@@ -559,7 +735,7 @@ export default function Home() {
         </section>
 
         {/* RESERVA */}
-        <section className="section" id="reserva">
+        <section className="section section--dark" id="reserva">
           <div className="container">
             <h2>Reserva tu plaza</h2>
             <p className="section__lead">Completa el formulario (30 segundos). Te confirmamos por WhatsApp en menos de 24h.</p>
@@ -573,14 +749,14 @@ export default function Home() {
                     <div className="pay__label">Entrada</div>
                     <div className="pay__value">5€</div>
                   </div>
-                <div className="pay__row">
-                  <div className="pay__label">Bizum</div>
-                  <div className="pay__value">614 242 716</div>
-                </div>
-                <div className="pay__row">
-                  <div className="pay__label">Concepto</div>
-                  <div className="pay__value">IA 14FEB + Nombre</div>
-                </div>
+                  <div className="pay__row">
+                    <div className="pay__label">Bizum</div>
+                    <div className="pay__value">614 242 716</div>
+                  </div>
+                  <div className="pay__row">
+                    <div className="pay__label">Concepto</div>
+                    <div className="pay__value">IA 14FEB + Nombre</div>
+                  </div>
 
                   <p className="note">
                     La plaza se confirma por orden de pago. Si eliges “pago en mano” en el formulario, te confirmaremos según
@@ -723,7 +899,7 @@ export default function Home() {
         </section>
       </main>
 
-      <div className="chatFab" id="chatFab" ref={fabRef} aria-expanded={chatOpen} onClick={handleFabClick}>
+      <div className="chatFab" id="chatFab" ref={fabRef} aria-expanded={chatOpen} onClick={handleFabClick} style={{ bottom: '32px', right: '32px' }}>
         Chat IA
       </div>
 
@@ -738,7 +914,7 @@ export default function Home() {
         <div className="chatHeader">
           <div>
             <div className="chatTitle">Asistente IA (Nexus-1)</div>
-            <div className="chatSub">Dudas rápidas. Si dejas tu WhatsApp, te mando la respuesta allí.</div>
+            <div className="chatSub">En línea · Responde al instante</div>
           </div>
           <button className="chatClose" id="chatClose" aria-label="Cerrar chat" onClick={handleCloseClick}>
             ×
@@ -787,6 +963,7 @@ export default function Home() {
               )}
             </div>
           ))}
+          <div ref={messagesEndRef} />
         </div>
 
         <form className="chatForm" id="chatForm" onSubmit={handleChatSubmit}>
@@ -803,7 +980,7 @@ export default function Home() {
           </button>
         </form>
 
-        <div className="micro" id="chatStatus">
+        <div className="chatStatus">
           {chatStatus}
         </div>
       </section>
@@ -811,7 +988,10 @@ export default function Home() {
       <footer className="footer">
         <div className="container footer__inner">
           <div className="footer__left">
-            <Image className="footer__logo" src="/assets/tecrural-logo.png" alt="TecRural" width={34} height={34} />
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <Image className="footer__logo" src="/assets/tecrural-official-logo.jpg" alt="TecRural" width={34} height={34} />
+              <Image className="footer__logo" src="/assets/fidesdigital-logo.png" alt="FidesDigital" width={34} height={34} style={{ borderRadius: '6px' }} />
+            </div>
             <div>
               <div className="footer__title">TecRural</div>
               <div className="footer__sub">con FidesDigital</div>
@@ -834,68 +1014,4 @@ export default function Home() {
   );
 }
 
-/* ---------- helpers ---------- */
-function clamp(n, min, max) {
-  return Math.max(min, Math.min(max, n));
-}
 
-async function callMistral(history) {
-  const res = await fetch(MISTRAL_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${MISTRAL_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: MISTRAL_MODEL,
-      messages: history,
-      temperature: 0.4,
-      max_tokens: 450,
-    }),
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Mistral error: ${res.status} ${text}`);
-  }
-  const data = await res.json();
-  return data?.choices?.[0]?.message?.content?.trim() || "Sin respuesta, prueba de nuevo.";
-}
-
-async function sendWhatsAppMessage(to, body) {
-  const res = await fetch(WHAPI_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${WHAPI_TOKEN}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ to, body }),
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`WHAPI error: ${res.status} ${text}`);
-  }
-  return res.json();
-}
-
-async function copyToClipboard(text) {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch (e) {
-    return false;
-  }
-}
-
-function sanitizePhone(raw) {
-  if (!raw) return "";
-  const digits = raw.replace(/\D/g, "");
-  if (!digits) return "";
-  if (digits.startsWith("0")) return "";
-  if (digits.length === 9) return "34" + digits; // asume España sin prefijo
-  return digits;
-}
-
-function buildConcept(name) {
-  if (name && name.trim().length > 1) return `IA 14FEB + ${name.trim()}`;
-  return BIZUM_CONCEPT;
-}
